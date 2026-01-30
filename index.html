@@ -633,16 +633,14 @@
 
                     <div class="menu-item">
                         <div class="item-info">
-                            <span class="zh-name">每日限定甜點</span>
-                            <span class="note-tag" style="background-color: var(--highlight); color: #FFF;">請查看櫃檯前黑板</span>
+                            <span class="zh-name" id="daily-name">每日限定甜點</span>
+                            <span class="note-tag" id="daily-note" style="background-color: var(--highlight); color: #FFF;">請查看櫃檯前黑板</span>
                         </div>
-                        <span class="price">時價</span>
+                        <span class="price" id="daily-price">時價</span>
                     </div>
 
                     <div class="tabs1">
-                        <button class="tab-btn1"onclick="openTab('參考圖片')">參考圖片</button>
-                            <div class="item-info">
-                        </div>
+                        <button class="tab-btn1" onclick="openTab('參考圖片')">參考圖片</button>
                     </div>
                 </div>
 
@@ -760,7 +758,6 @@
         </div>
 
         <div class="footer-fixed">
-            <!-- <button class="action-btn" onclick="alert('點擊此處可導向蛋糕訂購連結或表單！')">點此預定蛋糕</button> -->
             <a href="https://myship.7-11.com.tw/general/detail/GM2509235553598" class="action-btn">點此預定蛋糕</a>
         </div>
     </div>
@@ -768,56 +765,76 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <script>
-        // 1. 初始化 Supabase
-        const SUPABASE_URL = 'https://yqedcpfjbkyjgmauahze.supabase.co';
-        const SUPABASE_KEY = 'sb_publishable_2aql_gXkY9fdY6rImYeOyw_M6-opiCM';
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // 1. 初始化 Supabase
+    const SUPABASE_URL = 'https://yqedcpfjbkyjgmauahze.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_2aql_gXkY9fdY6rImYeOyw_M6-opiCM'; 
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        // 2. 原本的 Tab 切換邏輯 (保留)
-        function openTab(tabName) {
-            var contents = document.getElementsByClassName("tab-content");
-            for (var i = 0; i < contents.length; i++) contents[i].classList.remove("active");
-            var buttons = document.getElementsByClassName("tab-btn");
-            for (var i = 0; i < buttons.length; i++) buttons[i].classList.remove("active");
-            document.getElementById(tabName).classList.add("active");
-            if(event.currentTarget.classList.contains('tab-btn')) {
-                event.currentTarget.classList.add("active");
-            }
+    // 2. 定義更新 UI 的函數 (精準使用 ID)
+    function updateDailyDessertUI(data) {
+        if (!data) return;
+        
+        const nameEl = document.getElementById('daily-name');
+        const priceEl = document.getElementById('daily-price');
+        const noteEl = document.getElementById('daily-note');
+
+        if (nameEl) nameEl.innerText = data.name;
+        if (priceEl) {
+            // 自動格式化價格
+            priceEl.innerText = data.price.includes('$') ? data.price : '$' + data.price;
         }
-
-        // 3. API 串接邏輯：更新畫面上的甜點資訊
-        const dessertNameEl = document.querySelector('.menu-item:last-child .zh-name'); // 定位「每日限定甜點」
-        const dessertPriceEl = document.querySelector('.menu-item:last-child .price');
-        const dessertNoteEl = document.querySelector('.menu-item:last-child .note-tag');
-
-        async function fetchDessert() {
-            const { data, error } = await supabase
-                .from('daily_desserts')
-                .select('*')
-                .eq('id', 1)
-                .single();
-            
-            if (data) {
-                updateUI(data);
-            }
+        if (noteEl) {
+            noteEl.innerText = data.note || "請查看櫃檯前黑板";
         }
+        console.log("✅ DESSERT 區塊已同步更新:", data.name);
+    }
 
-        function updateUI(data) {
-            dessertNameEl.innerText = data.name;
-            dessertPriceEl.innerText = data.price;
-            dessertNoteEl.innerText = data.note;
+    // 3. 初始讀取資料
+    async function fetchInitialData() {
+        const { data, error } = await supabaseClient
+            .from('daily_desserts')
+            .select('*')
+            .eq('id', 1)
+            .single();
+        
+        if (data) {
+            updateDailyDessertUI(data);
+        } else {
+            console.error("資料抓取失敗:", error);
         }
+    }
 
-        // 4. 開啟即時更新 (Realtime)
-        supabase
-            .channel('dessert-changes')
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'daily_desserts' }, payload => {
-                updateUI(payload.new);
-            })
-            .subscribe();
+    // 4. 設定 Realtime 即時聽取更新
+    supabaseClient
+        .channel('dessert-updates')
+        .on('postgres_changes', { 
+            event: 'UPDATE', 
+            schema: 'public', 
+            table: 'daily_desserts',
+            filter: 'id=eq.1' 
+        }, payload => {
+            updateDailyDessertUI(payload.new);
+        })
+        .subscribe();
 
-        // 初始化讀取
-        fetchDessert();
+    // 5. Tab 切換邏輯 (修正 event)
+    function openTab(tabName) {
+        const contents = document.getElementsByClassName("tab-content");
+        for (let i = 0; i < contents.length; i++) contents[i].classList.remove("active");
+        
+        const buttons = document.getElementsByClassName("tab-btn");
+        for (let i = 0; i < buttons.length; i++) buttons[i].classList.remove("active");
+        
+        const target = document.getElementById(tabName);
+        if (target) target.classList.add("active");
+        
+        if (window.event && window.event.currentTarget && window.event.currentTarget.classList.contains('tab-btn')) {
+            window.event.currentTarget.classList.add("active");
+        }
+    }
+
+    // 啟動
+    document.addEventListener('DOMContentLoaded', fetchInitialData);
     </script>
 </body>
 </html>
