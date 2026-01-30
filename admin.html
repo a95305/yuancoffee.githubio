@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>Yuan Coffee 後台管理系統</title>
+    <style>
+        body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; padding: 30px; background: #F9F5F0; color: #5D4037; }
+        .admin-card { background: white; padding: 25px; border-radius: 15px; max-width: 500px; margin: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h2 { border-bottom: 2px solid #E0D5C1; padding-bottom: 10px; margin-bottom: 20px; }
+        label { font-weight: bold; display: block; margin-top: 15px; }
+        input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #DDD; border-radius: 8px; box-sizing: border-box; font-size: 1rem; }
+        
+        .primary-btn { width: 100%; padding: 14px; background: #5D4037; color: white; border: none; border-radius: 30px; cursor: pointer; font-weight: bold; font-size: 1rem; margin-top: 20px; transition: 0.3s; }
+        .primary-btn:hover { background: #8D6E63; }
+        
+        .status { text-align: center; margin-top: 15px; font-size: 0.9rem; font-weight: bold; min-height: 1.2rem; }
+
+        /* 前台樣式模擬 UI */
+        .preview-section { max-width: 500px; margin: 40px auto; }
+        .dessert-title { border-left: 5px solid #5D4037; padding-left: 15px; font-size: 1.5rem; font-weight: bold; margin-bottom: 20px; }
+        
+        .dessert-item { display: flex; justify-content: space-between; align-items: flex-start; padding: 15px 0; border-bottom: 1px dashed #D1C4E9; position: relative; }
+        .dessert-info { flex-grow: 1; }
+        .dessert-name { font-size: 1.1rem; font-weight: bold; margin: 0; }
+        .dessert-note { font-size: 0.85rem; color: #8D6E63; background: #EFEBE9; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-top: 5px; }
+        .dessert-price { font-size: 1.1rem; font-weight: bold; margin-left: 20px; }
+        
+        .delete-btn { background: #FF5252; color: white; border: none; border-radius: 5px; padding: 5px 10px; cursor: pointer; margin-left: 15px; font-size: 0.8rem; transition: 0.3s; }
+        .delete-btn:hover { background: #D32F2F; }
+    </style>
+</head>
+<body>
+
+    <div class="admin-card">
+        <h2>🍰 新增今日甜點</h2>
+        <label>甜點名稱</label>
+        <input type="text" id="name" placeholder="例如：草莓塔">
+        <label>價格</label>
+        <input type="text" id="price" placeholder="例如：$200">
+        <label>備註標籤 (可不填)</label>
+        <input type="text" id="note" placeholder="例如：每日限量供應">
+        
+        <button id="addBtn" class="primary-btn">確認上架甜點</button>
+        <p id="status" class="status"></p>
+    </div>
+
+    <div class="preview-section">
+        <div class="dessert-title">DESSERT 手做甜點</div>
+        <div id="dessertList">
+            <p style="text-align:center; color:#999;">讀取中...</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script>
+        const SUPABASE_URL = 'https://yqedcpfjbkyjgmauahze.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_2aql_gXkY9fdY6rImYeOyw_M6-opiCM';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // 初始化時抓取清單
+        fetchDesserts();
+
+        // 函數：抓取所有甜點並顯示
+        async function fetchDesserts() {
+            const listEl = document.getElementById('dessertList');
+            
+            const { data, error } = await supabaseClient
+                .from('daily_desserts')
+                .select('*')
+                .order('created_at', { ascending: false }); // 最新發布的在上面
+
+            if (error) {
+                listEl.innerHTML = "讀取資料失敗";
+                return;
+            }
+
+            if (data.length === 0) {
+                listEl.innerHTML = "<p style='text-align:center; color:#999;'>目前沒有甜點上架中</p>";
+                return;
+            }
+
+            listEl.innerHTML = data.map(item => `
+                <div class="dessert-item">
+                    <div class="dessert-info">
+                        <p class="dessert-name">${item.name}</p>
+                        ${item.note ? `<span class="dessert-note">${item.note}</span>` : ''}
+                    </div>
+                    <div class="dessert-price">${item.price}</div>
+                    <button class="delete-btn" onclick="deleteDessert(${item.id})">刪除</button>
+                </div>
+            `).join('');
+        }
+
+        // 函數：新增甜點
+        async function addDessert() {
+            const name = document.getElementById('name').value;
+            const price = document.getElementById('price').value;
+            const note = document.getElementById('note').value;
+            const statusEl = document.getElementById('status');
+
+            if(!name || !price) {
+                alert("名稱與價格不能為空！");
+                return;
+            }
+
+            statusEl.innerText = "上架中...";
+            statusEl.style.color = "orange";
+
+            // 改用 .insert 新增資料
+            const { error } = await supabaseClient
+                .from('daily_desserts')
+                .insert([{ name, price, note }]);
+
+            if (!error) {
+                statusEl.innerText = "✅ 上架成功！";
+                statusEl.style.color = "green";
+                // 清空輸入框
+                document.getElementById('name').value = '';
+                document.getElementById('price').value = '';
+                document.getElementById('note').value = '';
+                // 重新刷新列表
+                fetchDesserts();
+            } else {
+                statusEl.innerText = "❌ 失敗：" + error.message;
+                statusEl.style.color = "red";
+            }
+        }
+
+        // 函數：刪除甜點
+        async function deleteDessert(id) {
+            if(!confirm("確定要下架這份甜點嗎？")) return;
+
+            const { error } = await supabaseClient
+                .from('daily_desserts')
+                .delete()
+                .eq('id', id);
+
+            if (!error) {
+                fetchDesserts(); // 刷新列表
+            } else {
+                alert("刪除失敗：" + error.message);
+            }
+        }
+
+        document.getElementById('addBtn').addEventListener('click', addDessert);
+    </script>
+</body>
+</html>
