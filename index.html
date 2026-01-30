@@ -765,17 +765,59 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <script>
+        // 1. 初始化 Supabase
+        const SUPABASE_URL = 'https://yqedcpfjbkyjgmauahze.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_2aql_gXkY9fdY6rImYeOyw_M6-opiCM';
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // 2. 原本的 Tab 切換邏輯 (保留)
         function openTab(tabName) {
             var contents = document.getElementsByClassName("tab-content");
             for (var i = 0; i < contents.length; i++) contents[i].classList.remove("active");
-
             var buttons = document.getElementsByClassName("tab-btn");
             for (var i = 0; i < buttons.length; i++) buttons[i].classList.remove("active");
-
             document.getElementById(tabName).classList.add("active");
-            event.currentTarget.classList.add("active");
+            if(event.currentTarget.classList.contains('tab-btn')) {
+                event.currentTarget.classList.add("active");
+            }
         }
+
+        // 3. API 串接邏輯：更新畫面上的甜點資訊
+        const dessertNameEl = document.querySelector('.menu-item:last-child .zh-name'); // 定位「每日限定甜點」
+        const dessertPriceEl = document.querySelector('.menu-item:last-child .price');
+        const dessertNoteEl = document.querySelector('.menu-item:last-child .note-tag');
+
+        async function fetchDessert() {
+            const { data, error } = await supabase
+                .from('daily_desserts')
+                .select('*')
+                .eq('id', 1)
+                .single();
+            
+            if (data) {
+                updateUI(data);
+            }
+        }
+
+        function updateUI(data) {
+            dessertNameEl.innerText = data.name;
+            dessertPriceEl.innerText = data.price;
+            dessertNoteEl.innerText = data.note;
+        }
+
+        // 4. 開啟即時更新 (Realtime)
+        supabase
+            .channel('dessert-changes')
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'daily_desserts' }, payload => {
+                updateUI(payload.new);
+            })
+            .subscribe();
+
+        // 初始化讀取
+        fetchDessert();
     </script>
 </body>
 </html>
